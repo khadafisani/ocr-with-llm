@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invoice OCR</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Invoice OCR</h1>
+    <p class="muted">glm-ocr reads each page, gemma4 extracts the invoice data, MongoDB stores it.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Upload</h2>
+      <label id="dropzone" class="dropzone">
+        <input id="fileInput" type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" hidden />
+        <strong>Drop invoices here</strong> or click to choose files
+        <span class="muted">PDF, PNG, JPG, WEBP. You can pick more than one.</span>
+      </label>
+      <div id="uploadMsg" class="muted"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Documents</h2>
+        <span id="queueInfo" class="muted"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>File</th><th>Status</th><th>Stage</th><th>Uploaded</th><th>Duration</th><th></th></tr>
+          </thead>
+          <tbody id="docRows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Invoices</h2>
+        <span class="muted">Click a row to see its items and notes</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Supplier</th><th>Invoice no</th><th>Label</th><th>Date</th>
+              <th>Contact</th><th class="num">Grand total</th><th class="num">Items</th>
+            </tr>
+          </thead>
+          <tbody id="invoiceRows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="ocrDialog">
+    <div class="card-head">
+      <h2 id="ocrTitle">OCR text</h2>
+      <button id="ocrClose" class="btn">Close</button>
+    </div>
+    <pre id="ocrText"></pre>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
