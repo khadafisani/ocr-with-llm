@@ -44,6 +44,7 @@ documents.post('/', async (c) => {
 })
 
 documents.get('/', async (c) => {
+  // ocrText: still present on documents processed by the old two-model pipeline
   const list = await UploadedDocument.find({}, { ocrText: 0, extractRaw: 0 }).sort({ createdAt: -1 }).lean()
   return c.json(list)
 })
@@ -70,7 +71,6 @@ documents.get('/:id/file', async (c) => {
   })
 })
 
-// ?stage=extract re-runs only the LLM extraction using the saved OCR text.
 documents.post('/:id/retry', async (c) => {
   const id = c.req.param('id')
   if (!isValidObjectId(id)) return c.json({ error: 'Invalid id' }, 400)
@@ -78,7 +78,6 @@ documents.post('/:id/retry', async (c) => {
   if (!doc) return c.json({ error: 'Not found' }, 404)
   if (doc.status === 'processing') return c.json({ error: 'Document is being processed' }, 409)
 
-  const skipOcr = c.req.query('stage') === 'extract' && !!doc.ocrText
   await removeInvoiceFor(id)
   await UploadedDocument.updateOne(
     { _id: id },
@@ -86,8 +85,8 @@ documents.post('/:id/retry', async (c) => {
       $set: { status: 'queued', stage: 'queued', error: null, invoiceId: null, progress: { page: 0, totalPages: 0 } },
     },
   )
-  enqueue(id, skipOcr)
-  return c.json({ ok: true, skipOcr }, 202)
+  enqueue(id)
+  return c.json({ ok: true }, 202)
 })
 
 documents.delete('/:id', async (c) => {

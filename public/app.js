@@ -3,8 +3,7 @@ const $ = (sel) => document.querySelector(sel)
 const STAGE_LABELS = {
   queued: 'Waiting in queue',
   converting: 'Converting PDF to images',
-  ocr: 'Reading text (glm-ocr)',
-  extracting: 'Extracting data (gemma4)',
+  extracting: 'Reading invoice (gemma4)',
   saving: 'Saving',
   done: 'Done',
 }
@@ -81,8 +80,8 @@ dropzone.addEventListener('drop', (e) => {
 function stageText(doc) {
   if (doc.status === 'failed') return `<span class="error">Failed at ${esc(doc.error?.stage)}: ${esc(doc.error?.message)}</span>`
   let text = esc(STAGE_LABELS[doc.stage] || doc.stage)
-  if (doc.stage === 'ocr' && doc.progress?.totalPages) {
-    text += ` <span class="muted">page ${Math.min(doc.progress.page + 1, doc.progress.totalPages)}/${doc.progress.totalPages}</span>`
+  if (doc.stage === 'extracting' && doc.progress?.page > 1) {
+    text += ` <span class="muted">${doc.progress.page} pages</span>`
   }
   return text
 }
@@ -104,9 +103,8 @@ function renderDocuments(docs) {
         <td>${fmtTime(d.createdAt)}</td>
         <td>${fmtDuration(d.durationMs)}</td>
         <td><div class="actions">
-          <button class="btn" data-action="ocr" data-id="${d._id}" data-name="${esc(d.originalName)}">OCR text</button>
+          <button class="btn" data-action="raw" data-id="${d._id}" data-name="${esc(d.originalName)}">Model output</button>
           <button class="btn" data-action="retry" data-id="${d._id}" ${busy ? 'disabled' : ''}>Retry</button>
-          <button class="btn" data-action="extract" data-id="${d._id}" ${busy ? 'disabled' : ''} title="Re-run only gemma4 using the saved OCR text">Re-extract</button>
           <button class="btn danger" data-action="delete" data-id="${d._id}" ${busy ? 'disabled' : ''}>Delete</button>
         </div></td>
       </tr>`
@@ -119,15 +117,14 @@ $('#docRows').addEventListener('click', async (e) => {
   if (!btn) return
   const { action, id, name } = btn.dataset
   try {
-    if (action === 'ocr') {
+    if (action === 'raw') {
       const doc = await api(`/api/documents/${id}`)
-      $('#ocrTitle').textContent = `OCR text: ${name}`
-      $('#ocrText').textContent = doc.ocrText || '(no OCR text yet)'
+      $('#ocrTitle').textContent = `Model output: ${name}`
+      $('#ocrText').textContent = doc.extractRaw || '(no model output yet)'
       $('#ocrDialog').showModal()
       return
     }
     if (action === 'retry') await api(`/api/documents/${id}/retry`, { method: 'POST' })
-    if (action === 'extract') await api(`/api/documents/${id}/retry?stage=extract`, { method: 'POST' })
     if (action === 'delete') {
       if (!confirm(`Delete ${name || 'this document'} and its invoice?`)) return
       await api(`/api/documents/${id}`, { method: 'DELETE' })

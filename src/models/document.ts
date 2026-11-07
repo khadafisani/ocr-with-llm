@@ -1,7 +1,7 @@
 import { Schema, model, type InferSchemaType } from 'mongoose'
 
 export const STATUSES = ['queued', 'processing', 'success', 'failed'] as const
-export const STAGES = ['queued', 'converting', 'ocr', 'extracting', 'saving', 'done'] as const
+export const STAGES = ['queued', 'converting', 'extracting', 'saving', 'done'] as const
 
 export type Stage = (typeof STAGES)[number]
 
@@ -21,7 +21,6 @@ const documentSchema = new Schema(
       message: String,
       stage: String,
     },
-    ocrText: String,
     extractRaw: String,
     invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice' },
     startedAt: Date,

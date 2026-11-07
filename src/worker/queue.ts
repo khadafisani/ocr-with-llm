@@ -5,19 +5,16 @@ import { UploadedDocument, type Stage } from '../models/document'
 import { Invoice } from '../models/invoice'
 import { InvoiceItem } from '../models/invoiceItem'
 import { extractInvoice } from '../services/extract'
-import { ocrPage } from '../services/ocr'
 import { pdfToPngs } from '../services/pdf'
 
-type Job = { id: string; skipOcr: boolean }
-
-const jobs: Job[] = []
+const jobs: string[] = []
 const pending = new Set<string>()
 let running = false
 
-export function enqueue(id: string, skipOcr = false) {
+export function enqueue(id: string) {
   if (pending.has(id)) return
   pending.add(id)
-  jobs.push({ id, skipOcr })
+  jobs.push(id)
   void drain()
 }
 
@@ -25,14 +22,14 @@ async function drain() {
   if (running) return
   running = true
   try {
-    let job: Job | undefined
-    while ((job = jobs.shift())) {
+    let id: string | undefined
+    while ((id = jobs.shift())) {
       try {
-        await processDocument(job)
+        await processDocument(id)
       } catch (err) {
-        console.error(`[worker] unexpected error on ${job.id}`, err)
+        console.error(`[worker] unexpected error on ${id}`, err)
       } finally {
-        pending.delete(job.id)
+        pending.delete(id)
       }
     }
   } finally {
@@ -40,7 +37,7 @@ async function drain() {
   }
 }
 
-async function processDocument({ id, skipOcr }: Job) {
+async function processDocument(id: string) {
   const doc = await UploadedDocument.findById(id)
   if (!doc) return
 
@@ -51,24 +48,20 @@ async function processDocument({ id, skipOcr }: Job) {
     await UploadedDocument.updateOne({ _id: id }, { $set: { stage: next, ...extra } })
   }
 
-  await setStage(skipOcr && doc.ocrText ? 'extracting' : 'converting', {
+  await setStage('converting', {
     status: 'processing',
     startedAt,
     error: null,
     finishedAt: null,
     durationMs: null,
   })
-  console.log(`[worker] ${doc.originalName}: start (${stage})`)
+  console.log(`[worker] ${doc.originalName}: start`)
 
   try {
-    let ocrText = doc.ocrText ?? ''
+    const { pages, totalPages } = await loadPages(doc.storedPath, doc.mimeType)
+    await setStage('extracting', { progress: { page: pages.length, totalPages } })
 
-    if (stage === 'converting') {
-      ocrText = await runOcr(id, doc.storedPath, doc.mimeType, setStage)
-      await setStage('extracting')
-    }
-
-    const { raw, invoice } = await extractInvoice(ocrText)
+    const { raw, invoice } = await extractInvoice(pages, totalPages)
     await UploadedDocument.updateOne({ _id: id }, { $set: { extractRaw: raw } })
     const { items, ...header } = invoice
     if (!header.invoiceNo && !header.supplierName && header.grandTotal == null && !items.length) {
@@ -108,38 +101,13 @@ async function processDocument({ id, skipOcr }: Job) {
   }
 }
 
-// converting + ocr stages: render pages, OCR them one by one (sequential on purpose: one local model).
-async function runOcr(
-  id: string,
-  storedPath: string,
-  mimeType: string,
-  setStage: (next: Stage, extra?: Record<string, unknown>) => Promise<void>,
-): Promise<string> {
+// converting stage: PDFs become PNG pages (up to MAX_PDF_PAGES); images pass through as one page.
+async function loadPages(storedPath: string, mimeType: string): Promise<{ pages: Uint8Array[]; totalPages: number }> {
   const file = new Uint8Array(await readFile(storedPath))
-  let images: Uint8Array[] = [file]
-  let totalPages = 1
-  if (mimeType === 'application/pdf') {
-    const rendered = pdfToPngs(file, config.maxPdfPages, config.pdfDpi)
-    images = rendered.pages
-    totalPages = rendered.totalPages
-    if (!images.length) throw new Error('PDF has no pages')
-  }
-
-  await setStage('ocr', { progress: { page: 0, totalPages: images.length } })
-  const pageTexts: string[] = []
-  for (let i = 0; i < images.length; i++) {
-    pageTexts.push(await ocrPage(images[i]!))
-    await UploadedDocument.updateOne({ _id: id }, { $set: { 'progress.page': i + 1 } })
-  }
-  let ocrText = pageTexts
-    .map((t, i) => (images.length > 1 ? `--- Page ${i + 1} ---\n${t}` : t))
-    .join('\n\n')
-  if (totalPages > images.length) {
-    ocrText += `\n\n[Only the first ${images.length} of ${totalPages} pages were processed]`
-  }
-  await UploadedDocument.updateOne({ _id: id }, { $set: { ocrText } })
-  if (!ocrText.trim()) throw new Error('OCR returned no text')
-  return ocrText
+  if (mimeType !== 'application/pdf') return { pages: [file], totalPages: 1 }
+  const rendered = pdfToPngs(file, config.maxPdfPages, config.pdfDpi)
+  if (!rendered.pages.length) throw new Error('PDF has no pages')
+  return rendered
 }
 
 export async function removeInvoiceFor(documentId: string) {

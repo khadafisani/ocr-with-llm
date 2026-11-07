@@ -1,9 +1,12 @@
+import sharp from 'sharp'
 import { z } from 'zod'
 import { config } from '../config'
 import { chat } from './ollama'
 import { cleanString, parseDate, parseNumber } from './normalize'
 
 const str = { type: ['string', 'null'] }
+// Not nullable: with null allowed, gemma4:e4b returned null for every amount on some invoices that clearly print a total.
+const amount = { type: 'string' }
 
 // Amounts are requested as printed strings; we parse them ourselves so "1.234.567,00" isn't misread by the LLM.
 const JSON_FORMAT = {
@@ -20,10 +23,10 @@ const JSON_FORMAT = {
       required: ['name', 'phone', 'email', 'address'],
     },
     customerName: str,
-    currency: str,
-    subtotal: str,
-    tax: str,
-    grandTotal: str,
+    currency: amount,
+    subtotal: amount,
+    tax: amount,
+    grandTotal: amount,
     notes: str,
     items: {
       type: 'array',
@@ -40,7 +43,7 @@ const JSON_FORMAT = {
   ],
 }
 
-const SYSTEM_PROMPT = `You extract structured data from OCR text of an invoice (may be English or Indonesian).
+const SYSTEM_PROMPT = `You extract structured data from page images of an invoice (may be English or Indonesian).
 Return ONLY JSON matching the schema. Rules:
 - Copy values exactly as printed. Use null when a value is not present. Never invent values.
 - invoiceNo: the invoice number (e.g. "INV/2026/001"). invoiceLabel: the document title as printed (e.g. "Invoice", "Tax Invoice", "Faktur", "Nota").
@@ -48,7 +51,7 @@ Return ONLY JSON matching the schema. Rules:
 - supplierName: the company issuing the invoice (seller). customerName: who is billed (Bill To / Kepada).
 - contact: the supplier's contact person, phone, email and address.
 - currency: ISO code if you can tell (e.g. "IDR" for Rp, "USD" for $).
-- subtotal, tax, grandTotal, quantity, price, total: amount strings as printed, without changing separators.
+- subtotal, tax, grandTotal, quantity, price, total: amount strings as printed, without changing separators. For currency, subtotal, tax and grandTotal use "" when not present.
 - grandTotal: the final amount due (Total / Grand Total / Jumlah / Total Bayar).
 - items: every line item row. Do not include subtotal/tax/total rows as items.
   quantity is only the number, unit is the unit word (pcs, rim, kg, box...), price is the unit price, total is the line total.
@@ -129,14 +132,33 @@ function normalizeExtracted(data: z.infer<typeof extractedSchema>) {
   }
 }
 
-// Stage 2: the text LLM turns OCR text into invoice JSON.
-export async function extractInvoice(ocrText: string): Promise<{ raw: string; invoice: ExtractedInvoice }> {
+// Image tokens grow with pixel count, so cap the long side. rotate() applies EXIF orientation from phone photos.
+const toPngBase64 = async (image: Uint8Array) =>
+  (
+    await sharp(image)
+      .rotate()
+      .resize(config.maxImagePx, config.maxImagePx, { fit: 'inside', withoutEnlargement: true })
+      .png()
+      .toBuffer()
+  ).toString('base64')
+
+// One vision LLM call reads the page images and returns invoice JSON (benchmark: gemma4:e4b alone beat glm-ocr → gemma4:e2b).
+export async function extractInvoice(
+  pages: Uint8Array[],
+  totalPages = pages.length,
+): Promise<{ raw: string; invoice: ExtractedInvoice }> {
+  const note = totalPages > pages.length ? ` Only the first ${pages.length} of ${totalPages} pages are included.` : ''
   const raw = await chat(
     config.extractModel,
     [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: `OCR text of the invoice:\n\n${ocrText}` },
+      {
+        role: 'user',
+        content: `Extract the invoice from ${pages.length > 1 ? `these ${pages.length} page images, in order` : 'this image'}.${note}`,
+        images: await Promise.all(pages.map(toPngBase64)),
+      },
     ],
+    // think: false: with thinking on, gemma4 took minutes per page and sometimes returned nothing
     { format: JSON_FORMAT, think: false, options: { temperature: 0, num_ctx: 16384 } },
   )
 

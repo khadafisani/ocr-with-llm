@@ -9,7 +9,7 @@
 <body>
   <header>
     <h1>Invoice OCR</h1>
-    <p class="muted">glm-ocr reads each page, gemma4 extracts the invoice data, MongoDB stores it.</p>
+    <p class="muted">gemma4 reads the invoice images and extracts the data, MongoDB stores it.</p>
   </header>
 
   <main>
@@ -59,7 +59,7 @@
 
   <dialog id="ocrDialog">
     <div class="card-head">
-      <h2 id="ocrTitle">OCR text</h2>
+      <h2 id="ocrTitle">Model output</h2>
       <button id="ocrClose" class="btn">Close</button>
     </div>
     <pre id="ocrText"></pre>
