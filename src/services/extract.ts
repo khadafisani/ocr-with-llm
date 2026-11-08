@@ -132,30 +132,32 @@ function normalizeExtracted(data: z.infer<typeof extractedSchema>) {
   }
 }
 
+// Every page (uploaded image or mupdf-rendered PDF page) becomes WebP with the long side capped at MAX_IMAGE_PX.
 // Image tokens grow with pixel count, so cap the long side. rotate() applies EXIF orientation from phone photos.
-const toPngBase64 = async (image: Uint8Array) =>
+const toWebpBase64 = async (image: Uint8Array) =>
   (
     await sharp(image)
       .rotate()
       .resize(config.maxImagePx, config.maxImagePx, { fit: 'inside', withoutEnlargement: true })
-      .png()
+      .webp({ quality: 90 })
       .toBuffer()
   ).toString('base64')
 
 // One vision LLM call reads the page images and returns invoice JSON (benchmark: gemma4:e4b alone beat glm-ocr → gemma4:e2b).
 export async function extractInvoice(
+  model: string,
   pages: Uint8Array[],
   totalPages = pages.length,
 ): Promise<{ raw: string; invoice: ExtractedInvoice }> {
   const note = totalPages > pages.length ? ` Only the first ${pages.length} of ${totalPages} pages are included.` : ''
   const raw = await chat(
-    config.extractModel,
+    model,
     [
       { role: 'system', content: SYSTEM_PROMPT },
       {
         role: 'user',
         content: `Extract the invoice from ${pages.length > 1 ? `these ${pages.length} page images, in order` : 'this image'}.${note}`,
-        images: await Promise.all(pages.map(toPngBase64)),
+        images: await Promise.all(pages.map(toWebpBase64)),
       },
     ],
     // think: false: with thinking on, gemma4 took minutes per page and sometimes returned nothing

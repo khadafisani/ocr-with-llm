@@ -3,7 +3,7 @@ import { mkdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isValidObjectId, Types } from 'mongoose'
 import { ALLOWED_TYPES, config } from '../config'
-import { UploadedDocument } from '../models/document'
+import { MODES, UploadedDocument } from '../models/document'
 import { enqueue, removeInvoiceFor } from '../worker/queue'
 
 export const documents = new Hono()
@@ -12,6 +12,8 @@ documents.post('/', async (c) => {
   const body = await c.req.parseBody({ all: true })
   const files = ([] as unknown[]).concat(body.files ?? []).filter((f): f is File => f instanceof File)
   if (!files.length) return c.json({ error: 'No files uploaded (field "files")' }, 400)
+  const mode = MODES.find((m) => m === (body.mode ?? 'accurate'))
+  if (!mode) return c.json({ error: `mode must be one of: ${MODES.join(', ')}` }, 400)
 
   await mkdir(config.uploadDir, { recursive: true })
   const created = []
@@ -36,6 +38,7 @@ documents.post('/', async (c) => {
       mimeType,
       size: file.size,
       storedPath,
+      mode,
     })
     created.push(doc)
     enqueue(String(_id))

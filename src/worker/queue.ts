@@ -59,9 +59,10 @@ async function processDocument(id: string) {
 
   try {
     const { pages, totalPages } = await loadPages(doc.storedPath, doc.mimeType)
-    await setStage('extracting', { progress: { page: pages.length, totalPages } })
+    const model = config.models[doc.mode]
+    await setStage('extracting', { model, progress: { page: pages.length, totalPages } })
 
-    const { raw, invoice } = await extractInvoice(pages, totalPages)
+    const { raw, invoice } = await extractInvoice(model, pages, totalPages)
     await UploadedDocument.updateOne({ _id: id }, { $set: { extractRaw: raw } })
     const { items, ...header } = invoice
     if (!header.invoiceNo && !header.supplierName && header.grandTotal == null && !items.length) {
@@ -101,7 +102,7 @@ async function processDocument(id: string) {
   }
 }
 
-// converting stage: PDFs become PNG pages (up to MAX_PDF_PAGES); images pass through as one page.
+// converting stage: PDFs become PNG pages (up to MAX_PDF_PAGES); images pass through as one page. extractInvoice turns every page into WebP <= MAX_IMAGE_PX.
 async function loadPages(storedPath: string, mimeType: string): Promise<{ pages: Uint8Array[]; totalPages: number }> {
   const file = new Uint8Array(await readFile(storedPath))
   if (mimeType !== 'application/pdf') return { pages: [file], totalPages: 1 }

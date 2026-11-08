@@ -15,6 +15,11 @@
   <main>
     <section class="card">
       <h2>Upload</h2>
+      <fieldset class="modes">
+        <legend>Mode</legend>
+        <label><input type="radio" name="mode" value="fast" /> <strong>Fast</strong> <span class="muted">gemma4:e2b, ~16 s per invoice, more mistakes</span></label>
+        <label><input type="radio" name="mode" value="accurate" checked /> <strong>More accurate</strong> <span class="muted">gemma4:e4b, ~19 s per invoice</span></label>
+      </fieldset>
       <label id="dropzone" class="dropzone">
         <input id="fileInput" type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" hidden />
         <strong>Drop invoices here</strong> or click to choose files

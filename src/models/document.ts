@@ -3,6 +3,8 @@ import { Schema, model, type InferSchemaType } from 'mongoose'
 export const STATUSES = ['queued', 'processing', 'success', 'failed'] as const
 export const STAGES = ['queued', 'converting', 'extracting', 'saving', 'done'] as const
 
+export const MODES = ['fast', 'accurate'] as const
+
 export type Stage = (typeof STAGES)[number]
 
 const documentSchema = new Schema(
@@ -11,6 +13,9 @@ const documentSchema = new Schema(
     mimeType: { type: String, required: true },
     size: { type: Number, required: true },
     storedPath: { type: String, required: true },
+    // default 'accurate': documents from before modes existed were read with gemma4:e4b
+    mode: { type: String, enum: MODES, default: 'accurate' },
+    model: String,
     status: { type: String, enum: STATUSES, default: 'queued', index: true },
     stage: { type: String, enum: STAGES, default: 'queued' },
     progress: {

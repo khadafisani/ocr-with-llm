@@ -2,7 +2,11 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   mongoUrl: process.env.MONGO_URL ?? 'mongodb://127.0.0.1:27017/invoice_ocr',
   ollamaUrl: process.env.OLLAMA_URL ?? 'http://127.0.0.1:11434',
-  extractModel: process.env.EXTRACT_MODEL ?? 'gemma4:e4b',
+  // Upload modes (benchmark-results.xlsx, app prompt): fast ~16 s/doc, accurate ~19 s/doc and fewer mistakes
+  models: {
+    fast: process.env.FAST_MODEL ?? 'gemma4:e2b',
+    accurate: process.env.ACCURATE_MODEL ?? 'gemma4:e4b',
+  },
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   maxUploadBytes: Number(process.env.MAX_UPLOAD_MB ?? 20) * 1024 * 1024,
   maxPdfPages: Number(process.env.MAX_PDF_PAGES ?? 5),

@@ -3,7 +3,7 @@ const $ = (sel) => document.querySelector(sel)
 const STAGE_LABELS = {
   queued: 'Waiting in queue',
   converting: 'Converting PDF to images',
-  extracting: 'Reading invoice (gemma4)',
+  extracting: 'Reading invoice',
   saving: 'Saving',
   done: 'Done',
 }
@@ -49,6 +49,7 @@ async function upload(fileList) {
   if (!files.length) return
   const form = new FormData()
   files.forEach((f) => form.append('files', f))
+  form.append('mode', document.querySelector('input[name="mode"]:checked').value)
   $('#uploadMsg').textContent = `Uploading ${files.length} file(s)…`
   try {
     const res = await fetch('/api/documents', { method: 'POST', body: form })
@@ -80,6 +81,7 @@ dropzone.addEventListener('drop', (e) => {
 function stageText(doc) {
   if (doc.status === 'failed') return `<span class="error">Failed at ${esc(doc.error?.stage)}: ${esc(doc.error?.message)}</span>`
   let text = esc(STAGE_LABELS[doc.stage] || doc.stage)
+  if (doc.stage === 'extracting' && doc.model) text += ` (${esc(doc.model)})`
   if (doc.stage === 'extracting' && doc.progress?.page > 1) {
     text += ` <span class="muted">${doc.progress.page} pages</span>`
   }
@@ -97,7 +99,8 @@ function renderDocuments(docs) {
     .map((d) => {
       const busy = d.status === 'processing'
       return `<tr>
-        <td><a href="/api/documents/${d._id}/file" target="_blank">${esc(d.originalName)}</a></td>
+        <td><a href="/api/documents/${d._id}/file" target="_blank">${esc(d.originalName)}</a>
+          <div class="muted" title="${esc(d.model)}">${d.mode === 'fast' ? 'Fast' : 'More accurate'}</div></td>
         <td><span class="badge ${d.status}">${d.status}</span></td>
         <td>${stageText(d)}</td>
         <td>${fmtTime(d.createdAt)}</td>
