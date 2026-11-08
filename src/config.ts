@@ -7,7 +7,7 @@ export const config = {
   maxUploadBytes: Number(process.env.MAX_UPLOAD_MB ?? 20) * 1024 * 1024,
   maxPdfPages: Number(process.env.MAX_PDF_PAGES ?? 5),
   pdfDpi: Number(process.env.PDF_DPI ?? 150),
-  // 1024 measured fastest without loss (benchmark); at 720 small lines (invoice no) were missed on A4 scans
+  // 1024: 1500 px was 32-36% slower with no accuracy gain for gemma4:e4b (benchmark round 3); at 720 small lines (invoice no) were missed on A4 scans
   maxImagePx: Number(process.env.MAX_IMAGE_PX ?? 1024),
   ollamaTimeoutMs: Number(process.env.OLLAMA_TIMEOUT_MS ?? 10 * 60 * 1000),
 }
